@@ -1,104 +1,75 @@
-const knex = require("knex")
-const { mariadbOptions, sqliteOptions } = require("./dbConnection")
+import mongoose, {Schema} from "mongoose";
+
+mongoose.connect("mongodb+srv://backend:Passw0rd@cluster0.rdtbnd0.mongodb.net/?retryWrites=true&w=majority");
 
 class DB {
-    constructor(options, table){
-        this.options = options
-        this.table = table
-    }
-    
-    async iniciarInstancia(){
-        try {
-            this.instance = knex(this.options); 
-        } catch (error) {
-            console.log("Hubo un error al iniciar la instancia...\n" + error)
-        }
-    }
-
-    async destruirInstancia(){
-        try {
-            await this.instance.destroy()
-        } catch (error) {
-           console.log("Hubo un error al destruir la instancia...\n" + error) 
-        }
-    }
-
-    async verificarTabla(nombreTabla){ //Solo usar ya iniciada una instancia
-        return await this.instance.schema.hasTable(nombreTabla)
-    }
-
-    async crearTabla(fnTabla){
-        try {
-            this.iniciarInstancia();
-            if(!(await this.verificarTabla(this.table)))
-                await this.instance.schema.createTable(this.table, fnTabla);
-        } catch (error) {
-            console.log("Hubo un error al crear la tabla " + this.table + "\n" + error)
-        } finally {
-            this.destruirInstancia();
-        }
+    constructor(schema){
+        this.schema = schema
     }
 
     async conseguirData(){
-        let data;
         try {
-            this.iniciarInstancia();
-            if(await this.verificarTabla(this.table))
-                data = await this.instance(this.table).select();
+            return await this.schema.find({})
         } catch (error) {
-            console.log("Hubo un error al conseguir la data de la tabla " + this.table + "\n" + error)
+            console.log("Hubo un error al conseguir la data de la tabla " + this.schema + "\n" + error)
             throw Error("error")
-        } finally {
-            this.destruirInstancia();
-            return data
         }
     }
 
     async añadirData(data){
         try {
-            this.iniciarInstancia();
-            if(await this.verificarTabla(this.table))
-                await this.instance(this.table).insert(data);
+            const result = await this.schema(data).save()
+            return result
         } catch (error) {
-            console.log("Hubo un error al añadir la data de la tabla " + this.table + "\n" + error)
+            console.log("Hubo un error al añadir la data de la coleccion " + this.schema + "\n" + error)
             throw Error("error")
-        } finally {
-            this.destruirInstancia();
         }
-    }
-}
-
-class Productos extends DB {
-    constructor(){
-        super(mariadbOptions, "productos")
-    }
-
-    async crearTabla(){
-        await super.crearTabla((table) => {
-            table.increments("id");
-            table.string("nombre", 40);
-            table.integer("precio");
-            table.string("url", 80);
-        })
     }
 }
 
 class Mensajes extends DB {
     constructor(){
-        super(sqliteOptions, "mensajes")
+        super(mongoose.model("mensajes", {
+            author: {
+                id: {type: String, required: true},
+                nombre: {type: String, required: true},
+                apellido: {type: String, required: true},
+                edad: {type: Number, required: true},
+                alias: {type: String, required: true},
+                avatar: {type: String, required: true}
+            },
+            text: { type: String, required: true}
+        }))
     }
 
-    async crearTabla(){
-        await super.crearTabla((table) => {
-            table.increments("id");
-            table.string("email", 40);
-            table.string("message", 80);
-            table.timestamp("timestamp").defaultTo(this.instance.fn.now());
-        })
+    async agregarMensaje(mensaje){
+        await super.añadirData(mensaje);
+    }
+
+    async leerMensajes(){
+        return await super.conseguirData()
     }
 }
 
-module.exports = {
+class Productos extends DB {
+    constructor(){
+        super(mongoose.model("productos", {
+            nombre: {type: String, required: true},
+            precio: {type: Number, required: true},
+            url: {type: String, required: true}
+        }))
+    }
+
+    async agregarProducto(producto){
+        await super.añadirData(producto);
+    }
+
+    async leerProductos(){
+        return await super.conseguirData()
+    }
+}
+
+export {
     Productos,
     Mensajes
 }
